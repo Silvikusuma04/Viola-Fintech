@@ -1,0 +1,100 @@
+{% extends "layout.html" %}
+{% block title %}AI Risk Management Consultant{% endblock %}
+
+{% block content %}
+<div class="text-center">
+    <h1 class="text-4xl font-bold text-yellow-400 mb-4">Chatbot Risk Management Consultant</h1>
+    <p class="text-lg text-gray-300 max-w-3xl mx-auto mb-8">
+        Interact directly with <strong>Viola</strong> to analyze potential business and investment risks.
+    </p>
+</div>
+
+<div class="w-full max-w-3xl mx-auto bg-gray-800 rounded-lg shadow-2xl border border-gray-700 flex flex-col" style="height: 70vh;">
+    
+    <div class="p-4 border-b border-gray-700 text-center">
+        <h2 class="text-xl font-bold text-white">Viola</h2>
+    </div>
+
+    <div id="chat-box" class="flex-1 p-6 overflow-y-auto space-y-4">
+        <div class="flex">
+            <div class="bg-gray-700 text-white p-3 rounded-lg max-w-md">
+                <p class="text-sm"><strong>Viola:</strong> Hello! I am Viola, a risk management consultant. How can I assist you today?</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="p-4 border-t border-gray-700">
+        <div class="flex items-center space-x-3">
+            <input type="text" id="user-input" class="flex-1 bg-gray-700 text-white rounded-full py-2 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500" placeholder="Type your message..." />
+            <button onclick="sendMessage()" class="bg-yellow-500 text-gray-900 rounded-full w-10 h-10 flex items-center justify-center hover:bg-yellow-400 transition duration-300">
+                <svg class="w-6 h-6 transform rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const chatBox = document.getElementById("chat-box");
+    const userInput = document.getElementById("user-input");
+
+    function appendMessage(sender, text, isUser = false) {
+        const messageWrapper = document.createElement("div");
+        messageWrapper.className = "flex";
+        
+        const messageBubble = document.createElement("div");
+        messageBubble.className = `p-3 rounded-lg max-w-md text-sm`;
+
+        if (isUser) {
+            messageWrapper.classList.add("justify-end");
+            messageBubble.classList.add("bg-yellow-600", "text-white");
+        } else {
+            messageBubble.classList.add("bg-gray-700", "text-white");
+        }
+        
+        messageBubble.innerHTML = `<strong>${sender}:</strong> ${text}`;
+        messageWrapper.appendChild(messageBubble);
+        chatBox.appendChild(messageWrapper);
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function sendMessage() {
+        const text = userInput.value.trim();
+        if (!text) return;
+
+        appendMessage("You", text, true);
+        userInput.value = "";
+        
+        const loadingBubble = document.createElement("div");
+        loadingBubble.className = "flex";
+        loadingBubble.innerHTML = `
+            <div id="loading-indicator" class="bg-gray-700 text-white p-3 rounded-lg max-w-md text-sm">
+                <strong>Viola:</strong> Typing...
+            </div>
+        `;
+        chatBox.appendChild(loadingBubble);
+        chatBox.scrollTop = chatBox.scrollHeight;
+
+        fetch("{{ url_for('generate_chat') }}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_input: text })
+        })
+        .then(res => res.json())
+        .then(data => {
+            document.getElementById("loading-indicator").parentElement.remove();
+            appendMessage("Viola", data.response || "Sorry, an error occurred.");
+        })
+        .catch(() => {
+            document.getElementById("loading-indicator").parentElement.remove();
+            appendMessage("Viola", "A connection error occurred.");
+        });
+    }
+
+    userInput.addEventListener("keypress", function (e) {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+</script>
+{% endblock %}

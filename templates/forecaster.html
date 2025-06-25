@@ -1,0 +1,39 @@
+{% extends "layout.html" %}
+{% block title %}Market Forecaster{% endblock %}
+
+{% block content %}
+<div class="text-center">
+    <h1 class="text-4xl font-bold my-4">Dynamic Market Trend Forecaster</h1>
+    <p class="text-lg text-gray-400 mb-8 max-w-3xl mx-auto">
+        Enter keywords to compare their market interest over the past few years
+    </p>
+
+    <form method="POST" action="{{ url_for('forecaster') }}" class="max-w-xl mx-auto mb-10">
+        <div class="flex items-center space-x-3">
+            <input 
+                type="text" 
+                name="keywords" 
+                class="flex-1 bg-gray-700 text-white rounded-full py-2 px-4 focus:outline-none focus:ring-2 focus:ring-yellow-500" 
+                placeholder="e.g., AI, Investment, Economy"
+                required
+            >
+            <button type="submit" class="bg-yellow-500 text-gray-900 font-bold py-2 px-6 rounded-full hover:bg-yellow-400 transition duration-300">
+                Analyze
+            </button>
+        </div>
+        <p class="text-xs text-gray-500 mt-2">Separate keywords with a comma. Max 5 keywords.</p>
+    </form>
+
+    <div class="max-w-5xl mx-auto bg-gray-800 p-4 rounded-lg shadow-lg">
+        {% if error %}
+            <div class="text-red-400 p-4">
+                <p><strong>Error:</strong> {{ error }}</p>
+            </div>
+        {% elif plot_image %}
+            <img src="{{ url_for('static', filename='images/trends_chart.png') }}?v={{ timestamp }}" alt="Market Trends Chart">
+        {% else %}
+             <p class="text-gray-400">Please enter keywords above to generate a trend analysis chart.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

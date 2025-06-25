@@ -1,0 +1,16 @@
+Flask==3.1.1
+pandas==2.2.3
+numpy==1.26.4
+joblib==1.4.2
+shap==0.47.2
+tensorflow==2.19.0
+scikit-learn==1.6.1
+flask-cors
+flask-restx
+python-dotenv==1.0.1
+google-cloud-aiplatform>=1.47.0
+google-generativeai
+gunicorn
+matplotlib
+pytrends
+seaborn
