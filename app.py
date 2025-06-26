@@ -11,21 +11,27 @@ import vertexai
 from vertexai.generative_models import GenerativeModel, SafetySetting
 from pytrends.request import TrendReq
 import matplotlib
-matplotlib.use('Agg')  
+
+# Logika Adaptif untuk Lingkungan Berbeda
+# Cek apakah aplikasi berjalan di lingkungan server (seperti Cloud Run)
+# Variabel 'K_SERVICE' secara otomatis diatur oleh Google Cloud Run.
+if os.getenv('K_SERVICE'):
+    # Jika ya, gunakan backend 'Agg' yang tidak memerlukan GUI.
+    matplotlib.use('Agg')
+
 import matplotlib.pyplot as plt
 import seaborn as sns
 import time
-
 
 load_dotenv()
 
 app = Flask(__name__)
 
+# --- Inisialisasi Model & Layanan ---
 try:
     model = load_model('model/best_model.h5')
     le = joblib.load('Mapping/label_encoder_kategori.pkl')
     scaler = joblib.load('Mapping/scaler_startup_success.pkl')
-    
     background = np.zeros((10, len(scaler.feature_names_in_) + 1))
     def model_predict(X):
         return model.predict(X).flatten()
@@ -46,6 +52,7 @@ safety_settings = [
     for cat in SafetySetting.HarmCategory
 ]
 
+# --- Fungsi-fungsi Helper ---
 def calculate_age_in_years(date_str):
     today = datetime.today()
     try:
@@ -66,7 +73,6 @@ def generate_reason_with_values(shap_vals, features, label_output, original_valu
     }
     positive_reasons, negative_reasons = [], []
     shap_list = sorted(list(zip(features, shap_vals[0])), key=lambda x: abs(x[1]), reverse=True)
-
     for feat, val in shap_list:
         nilai_asli = original_values.get(feat, 0)
         unit = " years" if "umur" in feat else ""
@@ -76,13 +82,11 @@ def generate_reason_with_values(shap_vals, features, label_output, original_valu
             nilai_fmt = f"{int(nilai_asli / 1_000_000):,} million"
         else:
             nilai_fmt = f"{int(nilai_asli):,}"
-        
         label_feat = display_labels.get(feat, feat.replace('_', ' '))
         if label_output.lower() == 'failure':
             direction_text = 'reduces the risk of failure' if val > 0 else 'increases the risk of failure'
         else:
             direction_text = 'supports the potential for success' if val > 0 else 'reduces the potential for success'
-        
         reason_text = f"'{label_feat}' ({nilai_fmt}{unit}) {direction_text}"
         if val > 0:
             positive_reasons.append(reason_text)
@@ -112,6 +116,8 @@ def predict_and_explain(data_dict):
         shap_array, list(scaler.feature_names_in_) + ['populer'], label, inverse_values
     )
     return label, pos_reason, neg_reason
+
+# --- Rute Aplikasi ---
 
 @app.route('/')
 def home():
@@ -154,30 +160,38 @@ def forecaster():
         keywords_string = request.form.get('keywords')
         if not keywords_string or not keywords_string.strip():
             return render_template('forecaster.html', error="Input cannot be empty. Please enter at least one keyword.")
-
+        
         temp_list = [keyword.strip() for keyword in keywords_string.split(',')]
         keywords_list = [keyword for keyword in temp_list if keyword]
-
+        
         if not keywords_list:
             return render_template('forecaster.html', error="Invalid input. Please enter valid keywords.")
         
         keywords_list = keywords_list[:5]
-
+        
         try:
-            pytrends = TrendReq(hl='en-US', tz=360)
-            pytrends.build_payload(keywords_list, cat=0, timeframe='today 5-y', geo='', gprop='')
+            # Menggunakan konfigurasi Pytrends yang lebih tangguh
+            pytrends = TrendReq(
+                hl='en-US',
+                tz=360,
+                timeout=(10, 25),
+                retries=2,
+                backoff_factor=0.3,
+                requests_args={"headers": {"User-Agent": "Mozilla/5.0"}}
+            )
+            
+            pytrends.build_payload(keywords_list, cat=0, timeframe='today 1-y', geo='', gprop='')
             interest_df = pytrends.interest_over_time()
 
             if 'isPartial' in interest_df.columns:
                 interest_df = interest_df.drop(columns=['isPartial'])
-
+            
             if interest_df.empty:
-                return render_template('forecaster.html', error="Could not retrieve data. The keywords might be too specific or have no search volume.")
+                return render_template('forecaster.html', error="Could not retrieve data. The keywords might be too niche or have no search volume.")
             
             plt.style.use('seaborn-v0_8-darkgrid')
             fig, ax = plt.subplots(figsize=(12, 6))
             interest_df.plot(kind='line', ax=ax, lw=2, alpha=0.9)
-            
             ax.set_title('Strategic Trend Comparison: Market Interest', fontsize=16)
             ax.set_ylabel('Relative Search Interest (0-100)')
             ax.set_xlabel('Date')
@@ -190,9 +204,8 @@ def forecaster():
             plt.close(fig)
             
             return render_template('forecaster.html', plot_image=plot_path, timestamp=int(time.time()))
-
         except Exception as e:
-            error_msg = f"An error occurred. This could be due to a temporary issue with Google Trends or your network. (Error: {e})"
+            error_msg = f"An error occurred while fetching data from Google Trends. This is common when running locally or on cloud servers due to network restrictions. Please try again later or use a different network. (Error: {e})"
             return render_template('forecaster.html', error=error_msg)
             
     return render_template('forecaster.html')
@@ -205,11 +218,9 @@ def consultant():
 def generate_chat():
     if not CHAT_MODEL_LOADED:
         return jsonify({'response': 'Sorry, the chatbot model is currently unavailable.'})
-
     try:
         data = request.get_json()
         user_input = data['user_input']
-        
         system_instruction = (
             "You are Viola, a risk management consultant tasked with helping banks and investors make "
             "informed decisions about loans and funding, with a focus on evaluating the risk of startups, individuals, or institutions. "
@@ -218,10 +229,8 @@ def generate_chat():
             "'I'm sorry, I can only assist with questions about risk management, credit, and investment evaluation.'\n"
         )
         prompt = system_instruction + user_input
-        
         chat_session = chat_model.start_chat()
         response = chat_session.send_message(prompt, safety_settings=safety_settings)
-        
         return jsonify({'response': response.text})
     except Exception as e:
         return jsonify({'error': 'Internal server error'}), 500
